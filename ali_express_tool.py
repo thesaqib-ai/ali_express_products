@@ -14,36 +14,46 @@ search_button = st.button("Search")
 if search_button:
     # API request setup
     url = "https://aliexpress-datahub.p.rapidapi.com/item_search_2"
-    querystring = {"q": query, "page": "1", "sort": "default"}
     x_rapidapi_key = st.secrets["X-RAPIDAPI-KEY"]
     headers = {
         "x-rapidapi-key": x_rapidapi_key,
         "x-rapidapi-host": "aliexpress-datahub.p.rapidapi.com"
     }
 
-    # API request
-    response = requests.get(url, headers=headers, params=querystring)
+    all_products = []  # List to collect data from all pages
 
-    if response.status_code == 200:
-        data = response.json()
+    # Loop through 10 pages
+    for page in range(1, 11):
+        st.write(f"Fetching page {page}...")  # Display progress
+        querystring = {"q": query, "page": str(page), "sort": "default"}
 
-        # Extract relevant data
-        result_list = data.get("result", {}).get("resultList", [])
-        products = []
-        for item in result_list:
-            product = item.get("item", {})
-            products.append({
-                "Item ID": product.get("itemId"),
-                "Title": product.get("title"),
-                "Sales": product.get("sales"),
-                "Item URL": f"https:{product.get('itemUrl')}" if product.get("itemUrl") else None,
-                "Image URL": f"https:{product.get('image')}" if product.get("image") else None,
-                "Promotional Price": product.get("sku", {}).get("def", {}).get("promotionPrice"),
-                "Average Star Rate": product.get("averageStarRate")
-            })
+        # API request
+        response = requests.get(url, headers=headers, params=querystring)
 
+        if response.status_code == 200:
+            data = response.json()
+
+            # Extract relevant data
+            result_list = data.get("result", {}).get("resultList", [])
+            for item in result_list:
+                product = item.get("item", {})
+                all_products.append({
+                    "Item ID": product.get("itemId"),
+                    "Title": product.get("title"),
+                    "Sales": product.get("sales"),
+                    "Item URL": f"https:{product.get('itemUrl')}" if product.get("itemUrl") else None,
+                    "Image URL": f"https:{product.get('image')}" if product.get("image") else None,
+                    "Promotional Price": product.get("sku", {}).get("def", {}).get("promotionPrice"),
+                    "Average Star Rate": product.get("averageStarRate")
+                })
+        else:
+            st.error(f"Failed to fetch data on page {page}: {response.status_code}")
+            break  # Stop fetching pages if an error occurs
+
+    # Check if any products were fetched
+    if all_products:
         # Create DataFrame
-        df = pd.DataFrame(products)
+        df = pd.DataFrame(all_products)
 
         # Convert DataFrame to Excel in-memory
         output = BytesIO()
@@ -59,4 +69,4 @@ if search_button:
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
     else:
-        st.error(f"Failed to fetch data: {response.status_code}")
+        st.error("No products were fetched. Please try again.")
